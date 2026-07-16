@@ -1,0 +1,27 @@
+# Ansible
+*.retry
+ansible.log
+.vault_pass
+*.vault
+vault_pass.txt
+
+# Secrets
+*.pem
+*.key
+*.p12
+.env
+.secrets
+group_vars/vault.yml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp

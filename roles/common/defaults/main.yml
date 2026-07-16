@@ -1,0 +1,21 @@
+---
+# =============================================================
+#  roles/common/defaults/main.yml  – Low-priority defaults
+# =============================================================
+
+timezone:        "UTC"
+app_user:        "deploy"
+app_group:       "deploy"
+app_dir:         "/opt/myapp"
+app_log_dir:     "/var/log/myapp"
+host_alias:      "webserver"
+
+packages_common:
+  - curl
+  - wget
+  - git
+  - unzip
+  - htop
+  - vim
+  - net-tools
+  - python3-pip

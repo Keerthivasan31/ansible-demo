@@ -1,0 +1,106 @@
+---
+# =============================================================
+#  jenkins/rollback.yml
+#  Triggered automatically by the Jenkinsfile when deploy fails.
+#  Restores previous app version using the systemd journal rollback.
+# =============================================================
+
+- name: "ROLLBACK | Restore previous application version"
+  hosts: "{{ deploy_target | default('web') }}"
+  become: true
+  gather_facts: true
+  tags: [jenkins, rollback]
+
+  vars:
+    app_name:    "{{ app_name    | default('myapp') }}"
+    app_dir:     "{{ app_dir     | default('/opt/myapp') }}"
+    app_port:    "{{ app_port    | default(3000) }}"
+    backup_dir:  "/opt/backups"
+
+  tasks:
+
+    - name: "ROLLBACK | Check if a backup exists"
+      find:
+        paths: "{{ backup_dir }}"
+        patterns: "myapp_*.tar.gz"
+        age_stamp: mtime
+      register: backup_files
+
+    - name: "ROLLBACK | Fail if no backup found"
+      fail:
+        msg: "No backup found in {{ backup_dir }} – cannot rollback!"
+      when: backup_files.files | length == 0
+
+    - name: "ROLLBACK | Identify latest backup"
+      set_fact:
+        latest_backup: "{{ (backup_files.files | sort(attribute='mtime') | last).path }}"
+
+    - name: "ROLLBACK | Stop current app service"
+      service:
+        name: "{{ app_name }}"
+        state: stopped
+
+    - name: "ROLLBACK | Remove broken current app"
+      file:
+        path: "{{ app_dir }}"
+        state: absent
+
+    - name: "ROLLBACK | Restore from latest backup: {{ latest_backup }}"
+      unarchive:
+        src: "{{ latest_backup }}"
+        dest: /opt/
+        remote_src: yes
+
+    - name: "ROLLBACK | Fix ownership after restore"
+      file:
+        path: "{{ app_dir }}"
+        owner: deploy
+        group: deploy
+        recurse: yes
+
+    - name: "ROLLBACK | Restart app service"
+      service:
+        name: "{{ app_name }}"
+        state: started
+        enabled: yes
+
+    - name: "ROLLBACK | Wait for app to come back up"
+      wait_for:
+        host: 127.0.0.1
+        port: "{{ app_port }}"
+        delay: 5
+        timeout: 30
+        state: started
+
+    - name: "ROLLBACK | Verify app health after rollback"
+      uri:
+        url: "http://localhost:{{ app_port }}/health"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: rollback_health
+      retries: 3
+      delay: 5
+      until: rollback_health.status == 200
+
+    - name: "ROLLBACK | Write rollback metadata"
+      copy:
+        content: |
+          status=rolled_back
+          restored_from={{ latest_backup }}
+          rollback_time={{ ansible_date_time.iso8601 }}
+          host={{ inventory_hostname }}
+        dest: /etc/ansible-last-deploy
+        mode: '0644'
+
+    - name: "ROLLBACK | Remove in-progress marker if exists"
+      file:
+        path: /etc/ansible-deploy-in-progress
+        state: absent
+
+    - name: "ROLLBACK | Show rollback result"
+      debug:
+        msg:
+          - "⏪ Rollback SUCCESSFUL on {{ inventory_hostname }}"
+          - "   Restored: {{ latest_backup }}"
+          - "   App health: {{ rollback_health.status }}"

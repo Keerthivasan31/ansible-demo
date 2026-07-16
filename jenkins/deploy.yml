@@ -1,0 +1,108 @@
+---
+# =============================================================
+#  jenkins/deploy.yml
+#  Playbook called directly by Jenkins for targeted deploys.
+#  Supports extra-vars injected from the Jenkins pipeline:
+#    --extra-vars "app_version=v1.2.0 build_number=42"
+# =============================================================
+
+- name: "JENKINS | Pre-deploy – Record build metadata on all targets"
+  hosts: "{{ deploy_target | default('web') }}"
+  become: true
+  gather_facts: true
+  tags: [jenkins, pre-deploy]
+
+  vars:
+    build_number:  "{{ build_number | default('unknown') }}"
+    app_version:   "{{ app_version  | default('latest') }}"
+    deploy_time:   "{{ ansible_date_time.iso8601 }}"
+
+  tasks:
+    - name: "JENKINS | Write pre-deploy marker"
+      copy:
+        content: |
+          build_number={{ build_number }}
+          app_version={{ app_version }}
+          deploy_started={{ deploy_time }}
+          deployer=jenkins
+          host={{ inventory_hostname }}
+        dest: /etc/ansible-deploy-in-progress
+        mode: '0644'
+
+    - name: "JENKINS | Show deploy context"
+      debug:
+        msg:
+          - "Host      : {{ inventory_hostname }} ({{ ansible_host }})"
+          - "Version   : {{ app_version }}"
+          - "Build #   : {{ build_number }}"
+          - "Started   : {{ deploy_time }}"
+
+# ── Blue/Green: take host out of rotation before deploy ──────
+- name: "JENKINS | Take host out of Nginx upstream (zero-downtime)"
+  hosts: "{{ deploy_target | default('web') }}"
+  become: true
+  gather_facts: false
+  serial: 1               # rolling – one host at a time
+  tags: [jenkins, rolling]
+
+  tasks:
+    - name: "JENKINS | Pause app service before update"
+      service:
+        name: "{{ app_name | default('myapp') }}"
+        state: stopped
+
+    - name: "JENKINS | Wait 3s for connections to drain"
+      pause:
+        seconds: 3
+
+# ── Deploy the app ────────────────────────────────────────────
+- name: "JENKINS | Deploy Node.js application"
+  hosts: "{{ deploy_target | default('web') }}"
+  become: true
+  gather_facts: true
+  serial: 1               # rolling deploy
+  tags: [jenkins, deploy]
+
+  roles:
+    - nodejs
+
+  post_tasks:
+    - name: "JENKINS | Restart Nginx after deploy"
+      service:
+        name: nginx
+        state: reloaded
+
+    - name: "JENKINS | Wait for app to bind to port {{ app_port | default(3000) }}"
+      wait_for:
+        host: 127.0.0.1
+        port: "{{ app_port | default(3000) }}"
+        delay: 3
+        timeout: 30
+        state: started
+
+    - name: "JENKINS | Self-health check via localhost"
+      uri:
+        url: "http://localhost:{{ app_port | default(3000) }}/health"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: health_result
+      retries: 5
+      delay: 5
+      until: health_result.status == 200
+
+    - name: "JENKINS | Write successful deploy metadata"
+      copy:
+        content: |
+          build_number={{ build_number | default('unknown') }}
+          app_version={{ app_version  | default('latest') }}
+          deploy_finished={{ ansible_date_time.iso8601 }}
+          status=success
+          host={{ inventory_hostname }}
+        dest: /etc/ansible-last-deploy
+        mode: '0644'
+
+    - name: "JENKINS | Remove in-progress marker"
+      file:
+        path: /etc/ansible-deploy-in-progress
+        state: absent

@@ -1,0 +1,7 @@
+---
+# =============================================================
+#  roles/common/vars/main.yml  – High-priority role vars
+# =============================================================
+
+# Immutable role-level constants (override group_vars if needed)
+ansible_managed_comment: "# Managed by Ansible – DO NOT EDIT MANUALLY"

@@ -1,0 +1,109 @@
+---
+# =============================================================
+#  roles/common/tasks/main.yml
+#  Part 1 – Baseline setup for all Ubuntu EC2 instances
+# =============================================================
+
+- name: "COMMON | Update apt cache"
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  tags: [common, setup]
+
+- name: "COMMON | Upgrade all packages to latest"
+  apt:
+    upgrade: dist
+    autoremove: yes
+    autoclean: yes
+  tags: [common, setup]
+
+- name: "COMMON | Install essential packages"
+  apt:
+    name: "{{ packages_common }}"
+    state: present
+  tags: [common, setup]
+
+- name: "COMMON | Set system timezone to {{ timezone }}"
+  timezone:
+    name: "{{ timezone }}"
+  tags: [common, setup]
+
+- name: "COMMON | Ensure NTP is configured"
+  template:
+    src: ntp.conf.j2
+    dest: /etc/ntp.conf
+    mode: '0644'
+  notify: restart ntp
+  ignore_errors: true
+  tags: [common, setup]
+
+- name: "COMMON | Create deploy user group"
+  group:
+    name: "{{ app_group }}"
+    state: present
+  tags: [common, setup]
+
+- name: "COMMON | Create deploy application user"
+  user:
+    name: "{{ app_user }}"
+    group: "{{ app_group }}"
+    shell: /bin/bash
+    home: "/home/{{ app_user }}"
+    create_home: yes
+    state: present
+  tags: [common, setup]
+
+- name: "COMMON | Create application directories"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: '0755'
+  loop:
+    - "{{ app_dir }}"
+    - "{{ app_log_dir }}"
+    - "/opt/backups"
+  tags: [common, setup]
+
+- name: "COMMON | Set hostname to {{ host_alias }}"
+  hostname:
+    name: "{{ host_alias }}"
+  tags: [common, setup]
+
+- name: "COMMON | Add host entry to /etc/hosts"
+  lineinfile:
+    path: /etc/hosts
+    regexp: "^127\\.0\\.1\\.1"
+    line: "127.0.1.1  {{ host_alias }}"
+    state: present
+  tags: [common, setup]
+
+- name: "COMMON | Disable swap (for Docker/Kubernetes readiness)"
+  command: swapoff -a
+  changed_when: false
+  tags: [common, setup]
+
+- name: "COMMON | Configure kernel parameters"
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_set: yes
+    state: present
+    reload: yes
+  loop:
+    - { name: "net.ipv4.ip_forward",         value: "1" }
+    - { name: "vm.overcommit_memory",         value: "1" }
+    - { name: "net.core.somaxconn",           value: "65535" }
+    - { name: "net.ipv4.tcp_max_syn_backlog", value: "65535" }
+  tags: [common, setup]
+
+- name: "COMMON | Print host info summary"
+  debug:
+    msg:
+      - "Host     : {{ inventory_hostname }} ({{ ansible_host }})"
+      - "OS       : {{ ansible_distribution }} {{ ansible_distribution_version }}"
+      - "Kernel   : {{ ansible_kernel }}"
+      - "CPU      : {{ ansible_processor_vcpus }} vCPU(s)"
+      - "RAM      : {{ ansible_memtotal_mb }} MB"
+  tags: [common, setup]

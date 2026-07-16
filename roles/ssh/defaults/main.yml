@@ -1,0 +1,13 @@
+---
+# =============================================================
+#  roles/ssh/defaults/main.yml
+# =============================================================
+
+ssh_port: 22
+allowed_ssh_users:
+  - ubuntu
+
+# Vault variables – override with encrypted values
+# Run: ansible-vault encrypt_string 'mysecret' --name 'vault_app_secret_key'
+vault_app_secret_key: "CHANGE_ME"
+vault_db_password:     "CHANGE_ME"

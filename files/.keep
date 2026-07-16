@@ -1,0 +1,12 @@
+# files/ directory
+# Place static files here that should be copied verbatim to the servers.
+# Examples:
+#   - Custom SSL certificates  (ssl.crt, ssl.key)
+#   - Shell scripts            (deploy.sh)
+#   - Custom config files      (custom_limits.conf)
+#
+# Use the Ansible 'copy' module to deploy them:
+#   - name: Copy file
+#     copy:
+#       src: files/myfile.conf
+#       dest: /etc/myfile.conf

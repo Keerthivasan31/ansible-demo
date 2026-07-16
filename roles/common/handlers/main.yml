@@ -1,0 +1,15 @@
+---
+# =============================================================
+#  roles/common/handlers/main.yml
+# =============================================================
+
+- name: restart ntp
+  service:
+    name: ntp
+    state: restarted
+    enabled: yes
+
+- name: restart rsyslog
+  service:
+    name: rsyslog
+    state: restarted

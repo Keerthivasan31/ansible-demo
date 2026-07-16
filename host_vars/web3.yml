@@ -1,0 +1,20 @@
+---
+# =============================================================
+#  host_vars/web3.yml  –  Host-specific vars for web3
+#  EC2 Public IP: 52.66.238.174
+# =============================================================
+
+ansible_host:  "52.66.238.174"
+host_alias:    "web3"
+role_tag:      "secondary"
+nginx_server_name: "web3.myapp.local"
+
+pm2_instances: 2
+
+app_env_vars:
+  NODE_ENV:    "production"
+  PORT:        "3000"
+  DB_HOST:     "localhost"
+  DB_NAME:     "myapp_db"
+  LOG_LEVEL:   "info"
+  INSTANCE_ID: "web3"

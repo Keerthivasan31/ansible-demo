@@ -1,0 +1,24 @@
+---
+# =============================================================
+#  host_vars/web1.yml  –  Host-specific vars for web1
+#  EC2 Public IP: 43.205.125.233
+# =============================================================
+
+ansible_host:  "43.205.125.233"
+host_alias:    "web1"
+
+# This host is the PRIMARY / leader node
+role_tag:      "primary"
+nginx_server_name: "web1.myapp.local"
+
+# PM2 instance count (tune per instance size)
+pm2_instances: 2
+
+# Custom app environment overrides
+app_env_vars:
+  NODE_ENV:    "production"
+  PORT:        "3000"
+  DB_HOST:     "localhost"
+  DB_NAME:     "myapp_db"
+  LOG_LEVEL:   "info"
+  INSTANCE_ID: "web1"

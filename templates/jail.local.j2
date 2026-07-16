@@ -1,0 +1,40 @@
+# {{ ansible_managed }}
+# =============================================================
+#  fail2ban jail.local  –  Managed by Ansible
+#  Host: {{ inventory_hostname }}
+# =============================================================
+
+[DEFAULT]
+bantime   = {{ fail2ban_bantime }}
+findtime  = {{ fail2ban_findtime }}
+maxretry  = {{ fail2ban_maxretry }}
+backend   = auto
+usedns    = warn
+logencoding = auto
+enabled   = false
+
+[sshd]
+enabled   = true
+port      = {{ ssh_port }}
+logpath   = %(sshd_log)s
+backend   = %(sshd_backend)s
+maxretry  = {{ fail2ban_maxretry }}
+bantime   = {{ fail2ban_bantime }}
+
+[nginx-http-auth]
+enabled   = true
+port      = http,https
+logpath   = {{ nginx_log_dir }}/*error.log
+maxretry  = {{ fail2ban_maxretry }}
+
+[nginx-limit-req]
+enabled   = true
+port      = http,https
+logpath   = {{ nginx_log_dir }}/*error.log
+maxretry  = 10
+
+[nginx-botsearch]
+enabled   = true
+port      = http,https
+logpath   = {{ nginx_log_dir }}/*access.log
+maxretry  = 2

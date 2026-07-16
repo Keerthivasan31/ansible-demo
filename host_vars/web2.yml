@@ -1,0 +1,20 @@
+---
+# =============================================================
+#  host_vars/web2.yml  –  Host-specific vars for web2
+#  EC2 Public IP: 3.110.87.247
+# =============================================================
+
+ansible_host:  "3.110.87.247"
+host_alias:    "web2"
+role_tag:      "secondary"
+nginx_server_name: "web2.myapp.local"
+
+pm2_instances: 2
+
+app_env_vars:
+  NODE_ENV:    "production"
+  PORT:        "3000"
+  DB_HOST:     "localhost"
+  DB_NAME:     "myapp_db"
+  LOG_LEVEL:   "info"
+  INSTANCE_ID: "web2"

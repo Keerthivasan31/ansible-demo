@@ -1,0 +1,82 @@
+---
+# =============================================================
+#  roles/firewall/tasks/main.yml
+#  Part 3 – UFW firewall + fail2ban configuration
+# =============================================================
+
+- name: "FIREWALL | Install UFW and fail2ban"
+  apt:
+    name:
+      - ufw
+      - fail2ban
+    state: present
+    update_cache: yes
+  tags: [firewall, security]
+
+- name: "FIREWALL | Reset UFW to defaults (clean slate)"
+  ufw:
+    state: reset
+  tags: [firewall, security]
+
+- name: "FIREWALL | Set UFW default policy – deny incoming"
+  ufw:
+    default: deny
+    direction: incoming
+  tags: [firewall, security]
+
+- name: "FIREWALL | Set UFW default policy – allow outgoing"
+  ufw:
+    default: allow
+    direction: outgoing
+  tags: [firewall, security]
+
+- name: "FIREWALL | Allow defined ports"
+  ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "Allowed by Ansible"
+  loop: "{{ ufw_allowed_ports }}"
+  tags: [firewall, security]
+
+- name: "FIREWALL | Rate-limit SSH connections (brute-force protection)"
+  ufw:
+    rule: limit
+    port: "{{ ssh_port }}"
+    proto: tcp
+    comment: "Rate-limit SSH"
+  tags: [firewall, security]
+
+- name: "FIREWALL | Enable UFW"
+  ufw:
+    state: enabled
+    logging: "on"
+  tags: [firewall, security]
+
+- name: "FIREWALL | Deploy fail2ban jail.local config"
+  template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart fail2ban
+  tags: [firewall, security]
+
+- name: "FIREWALL | Ensure fail2ban is started and enabled"
+  service:
+    name: fail2ban
+    state: started
+    enabled: yes
+  tags: [firewall, security]
+
+- name: "FIREWALL | Show UFW status"
+  command: ufw status verbose
+  register: ufw_status
+  changed_when: false
+  tags: [firewall, security]
+
+- name: "FIREWALL | Print UFW status"
+  debug:
+    msg: "{{ ufw_status.stdout_lines }}"
+  tags: [firewall, security]

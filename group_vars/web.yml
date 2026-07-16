@@ -1,0 +1,68 @@
+---
+# =============================================================
+#  group_vars/web.yml
+#  Variables shared across ALL hosts in the [web] group.
+# =============================================================
+
+# ---------- App -------------------------------------------
+app_name:         "myapp"
+app_port:         3000
+app_user:         "deploy"
+app_group:        "deploy"
+app_dir:          "/opt/myapp"
+app_log_dir:      "/var/log/myapp"
+node_env:         "production"
+
+# ---------- Node.js ---------------------------------------
+nodejs_version:   "18"          # Major version (LTS)
+npm_global_packages:
+  - pm2
+  - nodemon
+
+# ---------- Nginx -----------------------------------------
+nginx_worker_processes: auto
+nginx_worker_connections: 1024
+http_port:        80
+https_port:       443
+server_name:      "{{ ansible_host }}"   # Use EC2 public IP by default
+nginx_log_dir:    "/var/log/nginx"
+
+# ---------- Docker ----------------------------------------
+docker_compose_version: "2.27.0"
+docker_users:
+  - ubuntu
+
+# ---------- Security (Part 3) -----------------------------
+ssh_port:          22
+allowed_ssh_users:
+  - ubuntu
+ufw_allowed_ports:
+  - { port: "{{ ssh_port }}",   proto: tcp }
+  - { port: "{{ http_port }}", proto: tcp }
+  - { port: "{{ https_port }}", proto: tcp }
+  - { port: "{{ app_port }}", proto: tcp }
+fail2ban_maxretry:  5
+fail2ban_bantime:   "1h"
+fail2ban_findtime:  "10m"
+
+# ---------- System ----------------------------------------
+timezone:          "UTC"
+ntp_servers:
+  - 0.ubuntu.pool.ntp.org
+  - 1.ubuntu.pool.ntp.org
+packages_common:
+  - curl
+  - wget
+  - git
+  - unzip
+  - htop
+  - vim
+  - net-tools
+  - fail2ban
+  - ufw
+  - python3-pip
+  - python3-setuptools
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - software-properties-common

@@ -1,0 +1,10 @@
+---
+# =============================================================
+#  roles/nginx/defaults/main.yml
+# =============================================================
+
+nginx_worker_processes:    auto
+nginx_worker_connections:  1024
+http_port:                 80
+https_port:                443
+nginx_log_dir:             "/var/log/nginx"

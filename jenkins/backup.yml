@@ -1,0 +1,54 @@
+---
+# =============================================================
+#  jenkins/backup.yml
+#  Called BEFORE every Jenkins deploy to create a restore point.
+#  Jenkins pipeline should call this as a pre-deploy step.
+# =============================================================
+
+- name: "BACKUP | Create app backup before deploy"
+  hosts: "{{ deploy_target | default('web') }}"
+  become: true
+  gather_facts: true
+  tags: [jenkins, backup]
+
+  vars:
+    app_dir:       "/opt/myapp"
+    backup_dir:    "/opt/backups"
+    backup_retain: 5   # keep last 5 backups
+
+  tasks:
+
+    - name: "BACKUP | Ensure backup directory exists"
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: "BACKUP | Create timestamped archive of current app"
+      archive:
+        path: "{{ app_dir }}"
+        dest: "{{ backup_dir }}/myapp_{{ ansible_date_time.epoch }}.tar.gz"
+        format: gz
+        mode: '0640'
+      register: backup_result
+
+    - name: "BACKUP | Show backup created"
+      debug:
+        msg: "Backup created: {{ backup_result.dest }}"
+
+    - name: "BACKUP | Find all existing backups"
+      find:
+        paths: "{{ backup_dir }}"
+        patterns: "myapp_*.tar.gz"
+        age_stamp: mtime
+      register: all_backups
+
+    - name: "BACKUP | Remove old backups (keep last {{ backup_retain }})"
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: >-
+        {{ (all_backups.files | sort(attribute='mtime'))[:-backup_retain] }}
+      when: all_backups.files | length > backup_retain

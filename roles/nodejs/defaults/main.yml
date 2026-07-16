@@ -1,0 +1,16 @@
+---
+# =============================================================
+#  roles/nodejs/defaults/main.yml
+# =============================================================
+
+nodejs_version:   "18"
+npm_global_packages:
+  - pm2
+  - nodemon
+pm2_instances:    2
+app_name:         "myapp"
+app_port:         3000
+app_user:         "deploy"
+app_group:        "deploy"
+app_dir:          "/opt/myapp"
+node_env:         "production"

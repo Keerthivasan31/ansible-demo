@@ -1,0 +1,14 @@
+---
+# =============================================================
+#  roles/firewall/defaults/main.yml
+# =============================================================
+
+ssh_port:          22
+fail2ban_maxretry:  5
+fail2ban_bantime:   "1h"
+fail2ban_findtime:  "10m"
+ufw_allowed_ports:
+  - { port: "22",   proto: tcp }
+  - { port: "80",   proto: tcp }
+  - { port: "443",  proto: tcp }
+  - { port: "3000", proto: tcp }

@@ -1,0 +1,14 @@
+---
+# =============================================================
+#  roles/firewall/handlers/main.yml
+# =============================================================
+
+- name: restart fail2ban
+  service:
+    name: fail2ban
+    state: restarted
+    enabled: yes
+
+- name: reload ufw
+  command: ufw reload
+  changed_when: false

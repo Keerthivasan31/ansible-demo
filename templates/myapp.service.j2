@@ -1,0 +1,49 @@
+# {{ ansible_managed }}
+# =============================================================
+#  systemd service unit for {{ app_name }}
+#  Managed by: Ansible | Host: {{ inventory_hostname }}
+# =============================================================
+
+[Unit]
+Description={{ app_name }} Node.js Application
+Documentation=https://github.com/yourorg/{{ app_name }}
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ app_user }}
+Group={{ app_group }}
+WorkingDirectory={{ app_dir }}
+
+# Environment
+Environment=NODE_ENV={{ node_env }}
+Environment=PORT={{ app_port }}
+EnvironmentFile={{ app_dir }}/.env
+
+# Command
+ExecStart=/usr/bin/node {{ app_dir }}/server.js
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier={{ app_name }}
+
+# Resource limits
+LimitNOFILE=65535
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target
