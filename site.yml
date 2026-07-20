@@ -1,106 +1,124 @@
 ---
 # =============================================================
-#  site.yml  –  Master Playbook
-#  Runs all roles across the [web] group in the correct order.
-#  Usage:
-#    ansible-playbook site.yml
-#    ansible-playbook site.yml --tags "docker,nginx"
-#    ansible-playbook site.yml --limit web1
+# site.yml - Master Playbook
 # =============================================================
 
 - name: "PART 1 | Setup – Common baseline for all web servers"
   hosts: web
   become: true
   gather_facts: true
-  tags: [setup, common]
+  tags:
+    - setup
+    - common
+
   roles:
     - common
 
-- name: "PART 2 | Deployment – Install Docker, Nginx, Node.js and deploy app"
+# ------------------------------------------------------------
+
+- name: "PART 2 | Deployment – Install Docker, Node.js and Nginx"
   hosts: web
   become: true
   gather_facts: true
-  tags: [deploy, docker, nginx, nodejs]
+  tags:
+    - deploy
+    - docker
+    - nodejs
+    - nginx
+
   roles:
     - docker
     - nodejs
     - nginx
 
-- name: "PART 3 | Security – SSH hardening, UFW firewall, fail2ban, Vault"
+# ------------------------------------------------------------
+
+- name: "PART 3 | Security – Firewall, SSH and Fail2Ban"
   hosts: web
   become: true
   gather_facts: true
-  tags: [security, firewall, ssh]
+  tags:
+    - security
+    - firewall
+    - ssh
+
   roles:
     - firewall
     - ssh
 
-- name: "PART 4 | Networking – Multi-host inventory, host groups validation"
-  hosts: web
-  become: true
-  gather_facts: true
-  tags: [networking]
-  tasks:
-    - name: Show all host network facts
-      debug:
-        msg: |
-          Host      : {{ inventory_hostname }}
-          Private IP: {{ ansible_default_ipv4.address }}
-          Public IP : {{ ansible_host }}
-          Group(s)  : {{ group_names | join(', ') }}
+# ------------------------------------------------------------
 
-- name: "PART 5 | Automation – Tags, scheduled runs, Jenkins-triggered deploy"
+- name: "PART 4 | Networking Information"
   hosts: web
   become: true
   gather_facts: true
-  tags: [automation]
+  tags:
+    - networking
+
+  tasks:
+
+    - name: Show host information
+      debug:
+        msg:
+          - "Hostname  : {{ inventory_hostname }}"
+          - "Private IP: {{ ansible_default_ipv4.address }}"
+          - "Public IP : {{ ansible_host }}"
+          - "Groups     : {{ group_names | join(', ') }}"
+
+# ------------------------------------------------------------
+
+- name: "PART 5 | Automation"
+  hosts: web
+  become: true
+  gather_facts: true
+  tags:
+    - automation
 
   vars:
-    build_number: "{{ build_number | default('manual') }}"
-    app_version:  "{{ app_version  | default('latest') }}"
+
+    # Jenkins automatically exports BUILD_NUMBER
+    deployment_build_number: "{{ lookup('env','BUILD_NUMBER') | default('manual', true) }}"
+
+    # Optional environment variable
+    deployment_app_version: "{{ lookup('env','APP_VERSION') | default('latest', true) }}"
 
   tasks:
 
-    # ── Cron: nightly self-healing re-deploy ─────────────────────
-    - name: "AUTO | Ensure nightly cron re-deploy at 2 AM"
+    - name: AUTO | Ensure nightly cron deployment
       cron:
-        name: "ansible-daily-deploy"
+        name: ansible-daily-deploy
         minute: "0"
         hour: "2"
         job: >
-          cd /opt/ansible-ec2-project &&
-          ansible-playbook site.yml --tags deploy
-          >> /var/log/ansible-cron.log 2>&1
+          cd /home/ubuntu/ansible-demo &&
+          ansible-playbook site.yml --tags deploy >>
+          /var/log/ansible-cron.log 2>&1
         state: present
-      tags: [automation, cron]
 
-    # ── Backup dir: ensure present before every Jenkins run ──────
-    - name: "AUTO | Ensure backup directory exists"
+    - name: AUTO | Ensure backup directory exists
       file:
         path: /opt/backups
         state: directory
         owner: root
         group: root
-        mode: '0750'
-      tags: [automation, jenkins]
+        mode: "0755"
 
-    # ── Record deployment metadata (Jenkins injects build_number) ─
-    - name: "AUTO | Write deployment metadata"
+    - name: AUTO | Write deployment metadata
       copy:
-        content: |
-          build_number={{ build_number }}
-          app_version={{ app_version }}
-          deploy_time={{ ansible_date_time.iso8601 }}
-          deployed_by={{ lookup('env', 'USER') | default('jenkins') }}
-          host={{ inventory_hostname }}
         dest: /etc/ansible-last-deploy
-        mode: '0644'
-      tags: [automation, jenkins]
+        mode: "0644"
+        content: |
+          Build Number : {{ deployment_build_number }}
+          Version      : {{ deployment_app_version }}
+          Deploy Time  : {{ ansible_date_time.iso8601 }}
+          User         : {{ lookup('env','USER') | default('ubuntu', true) }}
+          Host         : {{ inventory_hostname }}
+          Public IP    : {{ ansible_host }}
 
-    # ── Log rotation for ansible-cron.log ────────────────────────
-    - name: "AUTO | Ensure logrotate config for ansible cron log"
+    - name: AUTO | Configure logrotate
       copy:
         dest: /etc/logrotate.d/ansible-cron
+        mode: "0644"
         content: |
           /var/log/ansible-cron.log {
               weekly
@@ -110,13 +128,12 @@
               missingok
               notifempty
           }
-        mode: '0644'
-      tags: [automation]
 
-    - name: "AUTO | Show automation summary"
+    - name: AUTO | Display deployment summary
       debug:
         msg:
-          - "Cron : daily at 02:00 → ansible-playbook site.yml --tags deploy"
-          - "Build: #{{ build_number }} | Version: {{ app_version }}"
-          - "Host : {{ inventory_hostname }} ({{ ansible_host }})"
-      tags: [automation]
+          - "Deployment completed successfully"
+          - "Build Number : {{ deployment_build_number }}"
+          - "Application  : {{ deployment_app_version }}"
+          - "Host         : {{ inventory_hostname }}"
+          - "Public IP    : {{ ansible_host }}"

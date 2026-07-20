@@ -1,13 +1,14 @@
 ---
 # =============================================================
-#  roles/ssh/tasks/main.yml
-#  Part 3 – SSH hardening & Ansible Vault secrets management
+# roles/ssh/tasks/main.yml
+# SSH hardening & Ansible Vault secrets management
 # =============================================================
 
 - name: "SSH | Install OpenSSH server"
   apt:
     name: openssh-server
     state: present
+    update_cache: yes
   tags: [ssh, security]
 
 - name: "SSH | Backup original sshd_config"
@@ -23,21 +24,20 @@
     path: /etc/ssh/sshd_config
     regexp: "{{ item.regexp }}"
     line: "{{ item.line }}"
-    state: present
     validate: "/usr/sbin/sshd -t -f %s"
   loop:
-    - { regexp: "^#?PermitRootLogin",          line: "PermitRootLogin no" }
-    - { regexp: "^#?PasswordAuthentication",    line: "PasswordAuthentication no" }
+    - { regexp: "^#?PermitRootLogin", line: "PermitRootLogin no" }
+    - { regexp: "^#?PasswordAuthentication", line: "PasswordAuthentication no" }
     - { regexp: "^#?ChallengeResponseAuthentication", line: "ChallengeResponseAuthentication no" }
-    - { regexp: "^#?PubkeyAuthentication",      line: "PubkeyAuthentication yes" }
-    - { regexp: "^#?AuthorizedKeysFile",        line: "AuthorizedKeysFile .ssh/authorized_keys" }
-    - { regexp: "^#?X11Forwarding",             line: "X11Forwarding no" }
-    - { regexp: "^#?MaxAuthTries",              line: "MaxAuthTries 3" }
-    - { regexp: "^#?LoginGraceTime",            line: "LoginGraceTime 30" }
-    - { regexp: "^#?AllowTcpForwarding",        line: "AllowTcpForwarding no" }
-    - { regexp: "^#?ClientAliveInterval",       line: "ClientAliveInterval 300" }
-    - { regexp: "^#?ClientAliveCountMax",       line: "ClientAliveCountMax 2" }
-    - { regexp: "^#?Port ",                     line: "Port {{ ssh_port }}" }
+    - { regexp: "^#?PubkeyAuthentication", line: "PubkeyAuthentication yes" }
+    - { regexp: "^#?AuthorizedKeysFile", line: "AuthorizedKeysFile .ssh/authorized_keys" }
+    - { regexp: "^#?X11Forwarding", line: "X11Forwarding no" }
+    - { regexp: "^#?MaxAuthTries", line: "MaxAuthTries 3" }
+    - { regexp: "^#?LoginGraceTime", line: "LoginGraceTime 30" }
+    - { regexp: "^#?AllowTcpForwarding", line: "AllowTcpForwarding no" }
+    - { regexp: "^#?ClientAliveInterval", line: "ClientAliveInterval 300" }
+    - { regexp: "^#?ClientAliveCountMax", line: "ClientAliveCountMax 2" }
+    - { regexp: "^#?Port", line: "Port {{ ssh_port }}" }
   notify: restart sshd
   tags: [ssh, security]
 
@@ -46,45 +46,49 @@
     path: /etc/ssh/sshd_config
     regexp: "^#?AllowUsers"
     line: "AllowUsers {{ allowed_ssh_users | join(' ') }}"
-    state: present
     validate: "/usr/sbin/sshd -t -f %s"
   notify: restart sshd
   tags: [ssh, security]
 
 - name: "SSH | Ensure ubuntu user has .ssh directory"
   file:
-    path: "/home/ubuntu/.ssh"
+    path: /home/ubuntu/.ssh
     state: directory
     owner: ubuntu
     group: ubuntu
-    mode: '0700'
+    mode: "0700"
   tags: [ssh, security]
 
-- name: "SSH | Ensure authorized_keys permissions are correct"
+- name: "SSH | Ensure authorized_keys exists"
   file:
-    path: "/home/ubuntu/.ssh/authorized_keys"
+    path: /home/ubuntu/.ssh/authorized_keys
+    state: touch
     owner: ubuntu
     group: ubuntu
-    mode: '0600'
-    state: touch
+    mode: "0600"
   tags: [ssh, security]
 
-# ---- Ansible Vault example: deploy a secret config file ----
-- name: "SSH | Deploy vault-encrypted secrets to server"
-  copy:
-    content: |
-      # This file is managed by Ansible Vault
-      # To encrypt: ansible-vault encrypt_string 'my_secret' --name 'var_name'
-      # To run:    ansible-playbook site.yml --ask-vault-pass
-      APP_SECRET_KEY={{ vault_app_secret_key | default('CHANGE_ME_USE_VAULT') }}
-      DB_PASSWORD={{ vault_db_password | default('CHANGE_ME_USE_VAULT') }}
-    dest: "/opt/myapp/.secrets"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: '0600'
+- name: "SSH | Create application directory"
+  file:
+    path: /opt/myapp
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
   tags: [ssh, security, vault]
 
-- name: "SSH | Verify sshd config syntax"
+- name: "SSH | Deploy vault-encrypted secrets"
+  copy:
+    content: |
+      APP_SECRET_KEY={{ vault_app_secret_key | default('CHANGE_ME_USE_VAULT') }}
+      DB_PASSWORD={{ vault_db_password | default('CHANGE_ME_USE_VAULT') }}
+    dest: /opt/myapp/.secrets
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+  tags: [ssh, security, vault]
+
+- name: "SSH | Verify sshd configuration"
   command: sshd -t
   register: sshd_check
   changed_when: false

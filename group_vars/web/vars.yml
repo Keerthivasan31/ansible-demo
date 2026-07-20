@@ -1,0 +1,5 @@
+---
+app_env_vars:
+  NODE_ENV: production
+  PORT: "3000"
+  APP_NAME: myapp

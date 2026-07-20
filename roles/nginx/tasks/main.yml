@@ -1,73 +1,65 @@
 ---
 # =============================================================
-#  roles/nginx/tasks/main.yml
-#  Part 2 – Install & configure Nginx as a reverse proxy
+# roles/nginx/tasks/main.yml
+# Install and Configure Nginx Reverse Proxy
 # =============================================================
 
-- name: "NGINX | Install Nginx"
+- name: "NGINX | Install nginx"
   apt:
     name: nginx
     state: present
     update_cache: yes
   tags: [nginx, deploy]
 
-- name: "NGINX | Ensure Nginx is started and enabled"
+- name: "NGINX | Ensure nginx service is enabled"
   service:
     name: nginx
-    state: started
     enabled: yes
+    state: started
   tags: [nginx, deploy]
 
-- name: "NGINX | Remove default Nginx site"
+- name: "NGINX | Remove default nginx site"
   file:
     path: /etc/nginx/sites-enabled/default
     state: absent
   notify: reload nginx
   tags: [nginx, deploy]
 
-- name: "NGINX | Deploy app virtual host config from template"
+- name: "NGINX | Remove default site configuration"
+  file:
+    path: /etc/nginx/sites-available/default
+    state: absent
+  notify: reload nginx
+  tags: [nginx, deploy]
+
+- name: "NGINX | Deploy application virtual host"
   template:
     src: app.conf.j2
     dest: "/etc/nginx/sites-available/{{ app_name }}.conf"
     owner: root
     group: root
-    mode: '0644'
-    validate: "nginx -t -c /etc/nginx/nginx.conf"
+    mode: "0644"
   notify: reload nginx
   tags: [nginx, deploy]
 
-- name: "NGINX | Enable app site (create symlink)"
+- name: "NGINX | Enable application site"
   file:
     src: "/etc/nginx/sites-available/{{ app_name }}.conf"
     dest: "/etc/nginx/sites-enabled/{{ app_name }}.conf"
     state: link
+    force: yes
   notify: reload nginx
   tags: [nginx, deploy]
 
-- name: "NGINX | Set nginx.conf worker settings"
-  lineinfile:
-    path: /etc/nginx/nginx.conf
-    regexp: "^worker_processes"
-    line: "worker_processes {{ nginx_worker_processes }};"
-  notify: reload nginx
-  tags: [nginx, deploy]
-
-- name: "NGINX | Ensure Nginx log directory exists"
-  file:
-    path: "{{ nginx_log_dir }}"
-    state: directory
-    owner: www-data
-    group: www-data
-    mode: '0755'
-  tags: [nginx, deploy]
-
-- name: "NGINX | Test Nginx configuration"
+- name: "NGINX | Test nginx configuration"
   command: nginx -t
   register: nginx_test
   changed_when: false
   tags: [nginx, deploy]
 
-- name: "NGINX | Show Nginx test result"
-  debug:
-    msg: "{{ nginx_test.stderr_lines }}"
+- name: "NGINX | Reload nginx"
+  service:
+    name: nginx
+    state: reloaded
+  when: nginx_test.rc == 0
   tags: [nginx, deploy]

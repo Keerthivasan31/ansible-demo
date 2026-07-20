@@ -1,101 +1,136 @@
 ---
-# =============================================================
-#  roles/nodejs/tasks/main.yml
-#  Part 2 – Install Node.js, PM2, and deploy the app
-# =============================================================
+# ============================================================
+# roles/nodejs/tasks/main.yml
+# ============================================================
 
-- name: "NODEJS | Add NodeSource repository for Node.js {{ nodejs_version }}.x"
+- name: Install NodeSource repository
   shell: |
-    curl -fsSL https://deb.nodesource.com/setup_{{ nodejs_version }}.x | bash -
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
   args:
-    creates: /etc/apt/sources.list.d/nodesource.list
-  tags: [nodejs, deploy]
+    executable: /bin/bash
 
-- name: "NODEJS | Install Node.js"
+- name: Install NodeJS
   apt:
     name: nodejs
     state: present
     update_cache: yes
-  tags: [nodejs, deploy]
 
-- name: "NODEJS | Install global npm packages (PM2, nodemon)"
+- name: Install build tools
+  apt:
+    name:
+      - build-essential
+      - git
+    state: present
+
+- name: Install PM2
   npm:
-    name: "{{ item }}"
+    name: pm2
     global: yes
     state: present
-  loop: "{{ npm_global_packages }}"
-  tags: [nodejs, deploy]
 
-- name: "NODEJS | Copy application files to {{ app_dir }}"
-  synchronize:
-    src: "{{ playbook_dir }}/myapp/"
-    dest: "{{ app_dir }}/"
-    recursive: yes
-    delete: yes
-    rsync_opts:
-      - "--exclude=node_modules"
-      - "--exclude=.git"
-  tags: [nodejs, deploy]
-
-- name: "NODEJS | Set ownership of app directory"
+- name: Create application directory
   file:
-    path: "{{ app_dir }}"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    recurse: yes
+    path: /opt/myapp
     state: directory
-  tags: [nodejs, deploy]
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
 
-- name: "NODEJS | Install npm dependencies"
-  npm:
-    path: "{{ app_dir }}"
-    state: present
-    production: yes
-  become_user: "{{ app_user }}"
-  tags: [nodejs, deploy]
+- name: Remove previous application
+  file:
+    path: /opt/myapp
+    state: absent
 
-- name: "NODEJS | Write environment file .env"
+- name: Recreate application directory
+  file:
+    path: /opt/myapp
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+- name: Copy application
+  copy:
+    src: "{{ playbook_dir }}/myapp/"
+    dest: /opt/myapp/
+    owner: ubuntu
+    group: ubuntu
+
+- name: Remove old node_modules
+  file:
+    path: /opt/myapp/node_modules
+    state: absent
+
+- name: Remove package-lock
+  file:
+    path: /opt/myapp/package-lock.json
+    state: absent
+  ignore_errors: yes
+
+- name: Install npm packages
+  shell: |
+    cd /opt/myapp
+    npm install --production
+  args:
+    executable: /bin/bash
+  register: npm_install
+
+- debug:
+    var: npm_install.stdout_lines
+
+- debug:
+    var: npm_install.stderr_lines
+
+- name: Verify package.json exists
+  stat:
+    path: /opt/myapp/package.json
+  register: packagejson
+
+- fail:
+    msg: "package.json not found."
+  when: not packagejson.stat.exists
+
+- name: Verify express exists
+  shell: |
+    cd /opt/myapp
+    npm list express
+  register: express_check
+  failed_when: false
+
+- debug:
+    var: express_check.stdout_lines
+
+- name: Deploy env file
   template:
     src: env.j2
-    dest: "{{ app_dir }}/.env"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: '0600'
-  tags: [nodejs, deploy]
+    dest: /opt/myapp/.env
+    mode: "0600"
 
-- name: "NODEJS | Deploy systemd service unit from template"
+- name: Deploy systemd service
   template:
     src: myapp.service.j2
-    dest: "/etc/systemd/system/{{ app_name }}.service"
-    owner: root
-    group: root
-    mode: '0644'
-  notify:
-    - reload systemd
-    - restart myapp
-  tags: [nodejs, deploy]
+    dest: /etc/systemd/system/myapp.service
 
-- name: "NODEJS | Enable and start {{ app_name }} service"
+- name: Reload systemd
   systemd:
-    name: "{{ app_name }}"
-    state: started
-    enabled: yes
     daemon_reload: yes
-  tags: [nodejs, deploy]
 
-- name: "NODEJS | Check app is responding on port {{ app_port }}"
+- name: Restart service
+  systemd:
+    name: myapp
+    enabled: yes
+    state: restarted
+
+- name: Wait for app
+  wait_for:
+    port: 3000
+    timeout: 30
+
+- name: Health Check
   uri:
-    url: "http://localhost:{{ app_port }}"
-    method: GET
+    url: http://localhost:3000/health
     status_code: 200
-    timeout: 10
-  register: app_health
-  retries: 5
-  delay: 5
-  ignore_errors: true
-  tags: [nodejs, deploy]
+  register: health
 
-- name: "NODEJS | Show app health check result"
-  debug:
-    msg: "App status: {{ app_health.status | default('unreachable') }}"
-  tags: [nodejs, deploy]
+- debug:
+    var: health
